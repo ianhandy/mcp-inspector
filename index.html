@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MCP Inspector — Universal MCP Server Explorer</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ── Ambient particles ── -->
+<canvas id="particles"></canvas>
+
+<!-- ── Header ── -->
+<header class="header">
+  <div class="header-brand">
+    <div class="logo">
+      <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+        <rect x="2" y="2" width="24" height="24" rx="6" stroke="#DDC165" stroke-width="1.5" fill="none"/>
+        <circle cx="9" cy="10" r="2.5" fill="#E5591C"/>
+        <circle cx="19" cy="10" r="2.5" fill="#DDC165"/>
+        <path d="M9 16 L14 20 L19 16" stroke="#DDC165" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <h1>MCP Inspector</h1>
+    <span class="badge">v1.0</span>
+  </div>
+  <div class="header-status" id="connectionStatus">
+    <span class="status-dot disconnected"></span>
+    <span>No server connected</span>
+  </div>
+</header>
+
+<!-- ── Main Layout ── -->
+<div class="app-layout">
+
+  <!-- ── Sidebar ── -->
+  <aside class="sidebar">
+    <div class="sidebar-section">
+      <h3>Connect to Server</h3>
+      <div class="connect-form">
+        <label class="input-label">Server URL</label>
+        <input type="text" id="serverUrl" class="input" placeholder="http://localhost:3000/mcp" spellcheck="false">
+        <label class="input-label">Transport</label>
+        <select id="transportType" class="input">
+          <option value="streamable-http">Streamable HTTP</option>
+          <option value="sse">SSE (Legacy)</option>
+        </select>
+        <div class="connect-options">
+          <label class="input-label">Headers <span class="text-dim">(optional JSON)</span></label>
+          <textarea id="customHeaders" class="input input-textarea" rows="2" placeholder='{"Authorization": "Bearer ..."}'></textarea>
+        </div>
+        <button id="connectBtn" class="btn btn-primary" onclick="app.connect()">
+          <span class="btn-icon">⚡</span> Connect
+        </button>
+      </div>
+    </div>
+
+    <div class="sidebar-section" id="serverInfo" style="display:none">
+      <h3>Server Info</h3>
+      <div id="serverInfoContent" class="server-info-content"></div>
+    </div>
+
+    <div class="sidebar-section" id="savedServers">
+      <h3>Saved Servers</h3>
+      <div id="savedServersList" class="saved-servers-list">
+        <p class="text-dim text-sm">No saved servers yet</p>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── Main Content ── -->
+  <main class="main-content">
+    <!-- Welcome state -->
+    <div id="welcomeState" class="welcome-state">
+      <div class="welcome-icon">
+        <svg width="80" height="80" viewBox="0 0 80 80" fill="none">
+          <rect x="8" y="8" width="64" height="64" rx="16" stroke="#DDC165" stroke-width="2" fill="none" opacity="0.3"/>
+          <rect x="16" y="16" width="48" height="48" rx="12" stroke="#DDC165" stroke-width="1.5" fill="none" opacity="0.5"/>
+          <circle cx="30" cy="32" r="5" fill="#E5591C" opacity="0.8"/>
+          <circle cx="50" cy="32" r="5" fill="#DDC165" opacity="0.8"/>
+          <path d="M28 46 L40 56 L52 46" stroke="#DDC165" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.6"/>
+        </svg>
+      </div>
+      <h2>Universal MCP Inspector</h2>
+      <p>Connect to any MCP server to explore tools, resources, and prompts.<br>
+      Enter a server URL in the sidebar to get started.</p>
+      <div class="welcome-features">
+        <div class="feature-card">
+          <span class="feature-icon">🔧</span>
+          <span>Interactive tool execution</span>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon">📦</span>
+          <span>Resource browser</span>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon">💬</span>
+          <span>Prompt templates</span>
+        </div>
+        <div class="feature-card">
+          <span class="feature-icon">📋</span>
+          <span>Request history</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Connected state -->
+    <div id="connectedState" style="display:none">
+      <!-- Tab bar -->
+      <div class="tab-bar">
+        <button class="tab active" data-tab="tools" onclick="app.switchTab('tools')">
+          <span class="tab-icon">🔧</span> Tools <span class="tab-count" id="toolsCount">0</span>
+        </button>
+        <button class="tab" data-tab="resources" onclick="app.switchTab('resources')">
+          <span class="tab-icon">📦</span> Resources <span class="tab-count" id="resourcesCount">0</span>
+        </button>
+        <button class="tab" data-tab="prompts" onclick="app.switchTab('prompts')">
+          <span class="tab-icon">💬</span> Prompts <span class="tab-count" id="promptsCount">0</span>
+        </button>
+        <button class="tab" data-tab="history" onclick="app.switchTab('history')">
+          <span class="tab-icon">📋</span> History <span class="tab-count" id="historyCount">0</span>
+        </button>
+      </div>
+
+      <!-- Tab content -->
+      <div class="tab-content" id="tabContent">
+        <!-- Tools tab -->
+        <div class="tab-panel active" id="panel-tools">
+          <div class="panel-header">
+            <input type="text" class="input search-input" placeholder="Search tools..." id="toolSearch" oninput="app.filterTools()">
+          </div>
+          <div class="tools-list" id="toolsList"></div>
+        </div>
+
+        <!-- Resources tab -->
+        <div class="tab-panel" id="panel-resources">
+          <div class="panel-header">
+            <input type="text" class="input search-input" placeholder="Search resources..." id="resourceSearch" oninput="app.filterResources()">
+          </div>
+          <div class="resources-list" id="resourcesList"></div>
+        </div>
+
+        <!-- Prompts tab -->
+        <div class="tab-panel" id="panel-prompts">
+          <div class="panel-header">
+            <input type="text" class="input search-input" placeholder="Search prompts..." id="promptSearch" oninput="app.filterPrompts()">
+          </div>
+          <div class="prompts-list" id="promptsList"></div>
+        </div>
+
+        <!-- History tab -->
+        <div class="tab-panel" id="panel-history">
+          <div class="panel-header">
+            <button class="btn btn-sm" onclick="app.clearHistory()">Clear History</button>
+          </div>
+          <div class="history-list" id="historyList">
+            <p class="text-dim text-center">No requests yet</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ── Tool Execution Modal ── -->
+<div class="modal-overlay" id="modalOverlay" style="display:none" onclick="app.closeModal(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3 id="modalTitle">Execute Tool</h3>
+      <button class="modal-close" onclick="app.closeModal()">&times;</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+
+<!-- ── Toast container ── -->
+<div id="toastContainer" class="toast-container"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
